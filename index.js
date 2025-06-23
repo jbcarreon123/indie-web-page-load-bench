@@ -255,7 +255,7 @@ function calculateAverage(metricsArray, metricName) {
     console.log(`[Main] CSV header written to ${outputPath}.`);
 
     for (const url of urlsToTest) {
-      console.log(`\n--- [Site Loop] Processing URL: ${url} ---`);
+      console.log(`\n--- [Site Loop] Processing URL: ${url}, page ${urlsToTest.indexOf(url) + 1} of ${urlsToTest.length} ---`);
 
       // --- Homepage Link Identification (Only Once per Site) ---
       console.log(`  [Site Loop] Identifying homepage link for ${url} (only once)...`);
