@@ -251,26 +251,9 @@ function calculateAverage(metricsArray, metricName) {
     for (const url of urlsToTest) {
       console.log(`\n--- [Site Loop] Processing URL: ${url} ---`);
 
-      // --- Homepage Link Identification (Only Once per Site) ---
-      console.log(`  [Site Loop] Identifying homepage link for ${url} (only once)...`);
+      // Initialize homepage link variables for each URL
       let identifiedHomepageHref = 'N/A';
-      let homepageLinkFoundOverall = false; // True if any link was identified for this site
-
-      let tempPageForLinkFinding;
-      try {
-          tempPageForLinkFinding = await browser.newPage();
-          await tempPageForLinkFinding.goto(url, { waitUntil: 'load', timeout: DEFAULT_PAGE_TIMEOUT });
-          const linkResult = await findHomepageLinkOnce(tempPageForLinkFinding, url);
-          identifiedHomepageHref = linkResult.href;
-          homepageLinkFoundOverall = linkResult.found;
-          console.log(`  [Site Loop] Identified homepage link: ${identifiedHomepageHref} (Found: ${homepageLinkFoundOverall})`);
-      } catch (error) {
-          console.error(`  [Site Loop ERROR] Failed to identify homepage link for ${url}:`, error.message);
-      } finally {
-          if (tempPageForLinkFinding) {
-              await tempPageForLinkFinding.close();
-          }
-      }
+      let homepageLinkFoundOverall = false;
 
       // --- Initial Page Load Measurements (Individual Tries) ---
       console.log(`  [Site Loop] Measuring initial page load for ${url} (${NUM_TRIES_INITIAL_LOAD} tries)...`);
@@ -284,6 +267,16 @@ function calculateAverage(metricsArray, metricName) {
           page = await browser.newPage();
           metrics = await getPageLoadMetrics(page, url);
           status = 'Success'; // Mark as success if no error
+
+          // --- Homepage Link Identification (On the 3rd try only) ---
+          if (i === 2) { // 3rd try (index 2)
+              console.log(`      [Site Loop] Attempting to identify homepage link during 3rd initial load try.`);
+              const linkResult = await findHomepageLinkOnce(page, url);
+              identifiedHomepageHref = linkResult.href;
+              homepageLinkFoundOverall = linkResult.found;
+              console.log(`      [Site Loop] Homepage link identification complete (Found: ${homepageLinkFoundOverall}, Href: ${identifiedHomepageHref}).`);
+          }
+
         } catch (error) {
           console.error(`      [ERROR] Initial Load Try ${i + 1} for ${url} failed:`, error.message);
           if (error.name === 'TimeoutError') {
@@ -307,8 +300,8 @@ function calculateAverage(metricsArray, metricName) {
             `"${url}"`,
             i + 1,
             `"Initial Load"`,
-            homepageLinkFoundOverall,
-            `"${identifiedHomepageHref}"`,
+            homepageLinkFoundOverall, // Will be false/N/A for first 2, then actual
+            `"${identifiedHomepageHref}"`, // Will be "N/A" for first 2, then actual
             metrics.domContentLoadedTime_ms,
             metrics.loadTime_ms,
             metrics.pageLoadApiTime_ms,
@@ -341,7 +334,7 @@ function calculateAverage(metricsArray, metricName) {
       // --- Homepage Navigation Measurements (Individual Tries) ---
       console.log(`  [Site Loop] Measuring homepage navigation for ${url} (${NUM_TRIES_HOMEPAGE_NAVIGATION} tries)...`);
       const homepageNavigationMetricsOverTries = [];
-      if (homepageLinkFoundOverall) {
+      if (homepageLinkFoundOverall) { // Only proceed if a link was actually found on the 3rd initial try
           for (let i = 0; i < NUM_TRIES_HOMEPAGE_NAVIGATION; i++) {
               let pageForNavigation;
               let metrics = {};
@@ -393,16 +386,16 @@ function calculateAverage(metricsArray, metricName) {
               }
           }
       } else {
-          console.log(`  [Site Loop] Skipping homepage navigation measurements as no link was identified.`);
-          // Append DNF/N/A rows if no link was found at all
+          console.log(`  [Site Loop] Skipping homepage navigation measurements as no link was identified in the 3rd initial load try.`);
+          // Append N/A rows if no link was found at all, as no navigation was attempted
           for (let i = 0; i < NUM_TRIES_HOMEPAGE_NAVIGATION; i++) {
             const dataRow = [
               `"${url}"`,
               i + 1,
               `"Homepage Navigation"`,
-              homepageLinkFoundOverall,
-              `"${identifiedHomepageHref}"`,
-              'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A' // All metrics as N/A since no navigation was attempted
+              homepageLinkFoundOverall, // This will be false here
+              `"${identifiedHomepageHref}"`, // This will be "N/A" here
+              'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A' // All metrics as N/A
             ].join(',');
             fs.appendFileSync(outputPath, dataRow + '\n');
           }
