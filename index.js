@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Increased default timeout for page navigation and load states
-const DEFAULT_PAGE_TIMEOUT = 90000; // 90 seconds
+const DEFAULT_PAGE_TIMEOUT = 60000; // 90 seconds
 // Increased default timeout for element visibility waits
 const DEFAULT_ELEMENT_WAIT_TIMEOUT = 15000; // 15 seconds
 
@@ -21,7 +21,7 @@ async function getPageLoadMetrics(page, url) {
 
   page.on('response', async response => {
     try {
-      // Only count successful responses
+      // Only count successful responses (HTTP 2xx)
       if (response.status() < 200 || response.status() >= 400) {
         return;
       }
@@ -62,8 +62,8 @@ async function getPageLoadMetrics(page, url) {
     // API times from Navigation Timing API (if available)
     pageLoadApiTime_ms: performanceTiming ? parseFloat((performanceTiming.loadEventEnd - performanceTiming.startTime).toFixed(2)) : 'N/A',
     domContentLoadedApiTime_ms: performanceTiming ? parseFloat((performanceTiming.domContentLoadedEventEnd - performanceTiming.startTime).toFixed(2)) : 'N/A',
-    totalTransferredBytes: totalTransferredBytes,
-    totalTransferredMB: parseFloat((totalTransferredBytes / (1024 * 1024)).toFixed(2)),
+    pageSize_Bytes: totalTransferredBytes,
+    pageSize_MB: parseFloat((totalTransferredBytes / (1024 * 1024)).toFixed(2)),
     domElementCount: domElementCount,
   };
 }
@@ -184,7 +184,7 @@ function calculateAverage(metricsArray, metricName) {
       return trueCount > 0; // Returns true if at least one attempt found the link
   }
 
-  // Filter out non-numeric values and 'N/A' for average calculation
+  // Filter out non-numeric values and 'N/A' or 'DNF' for average calculation
   const values = metricsArray
     .map(m => m[metricName])
     .filter(val => typeof val === 'number' && !isNaN(val));
@@ -240,8 +240,8 @@ function calculateAverage(metricsArray, metricName) {
       'LoadTime_ms',
       'PageLoadApiTime_ms',
       'DOMContentLoadedApiTime_ms',
-      'TotalTransferredBytes',
-      'TotalTransferredMB',
+      'PageSize_Bytes',
+      'PageSize_MB',
       'DOMElementCount'
     ].join(',');
 
@@ -249,7 +249,7 @@ function calculateAverage(metricsArray, metricName) {
     console.log(`[Main] CSV header written to ${outputPath}.`);
 
     for (const url of urlsToTest) {
-      console.log(`\n--- [Site Loop] Processing URL: ${url}, page ${urlsToTest.indexOf(url) + 1} of ${urlsToTest.length} ---`);
+      console.log(`\n--- [Site Loop] Processing URL: ${url} ---`);
 
       // --- Homepage Link Identification (Only Once per Site) ---
       console.log(`  [Site Loop] Identifying homepage link for ${url} (only once)...`);
@@ -278,33 +278,30 @@ function calculateAverage(metricsArray, metricName) {
       for (let i = 0; i < NUM_TRIES_INITIAL_LOAD; i++) {
         let page;
         let metrics = {};
+        let status = 'N/A'; // Default for any error
         try {
           console.log(`    [Initial Load Try] Starting Try ${i + 1}/${NUM_TRIES_INITIAL_LOAD}...`);
           page = await browser.newPage();
           metrics = await getPageLoadMetrics(page, url);
-          initialLoadMetricsOverTries.push(metrics);
-
-          const dataRow = [
-            `"${url}"`,
-            i + 1,
-            `"Initial Load"`,
-            homepageLinkFoundOverall,
-            `"${identifiedHomepageHref}"`,
-            metrics.domContentLoadedTime_ms,
-            metrics.loadTime_ms,
-            metrics.pageLoadApiTime_ms,
-            metrics.domContentLoadedApiTime_ms,
-            metrics.totalTransferredBytes,
-            metrics.totalTransferredMB,
-            metrics.domElementCount
-          ].join(',');
-          fs.appendFileSync(outputPath, dataRow + '\n');
-          console.log(`      [Initial Load Try] Data for Try ${i + 1} appended.`);
+          status = 'Success'; // Mark as success if no error
         } catch (error) {
           console.error(`      [ERROR] Initial Load Try ${i + 1} for ${url} failed:`, error.message);
-          // Push placeholder metrics for failed tries
-          metrics = { error: error.message, domContentLoadedTime_ms: 'N/A', loadTime_ms: 'N/A', pageLoadApiTime_ms: 'N/A', domContentLoadedApiTime_ms: 'N/A', totalTransferredBytes: 'N/A', totalTransferredMB: 'N/A', domElementCount: 'N/A' };
-          initialLoadMetricsOverTries.push(metrics);
+          if (error.name === 'TimeoutError') {
+              status = 'DNF'; // Specific DNF for timeouts
+          }
+          // Set metrics to the determined status string
+          metrics = {
+            error: error.message,
+            domContentLoadedTime_ms: status,
+            loadTime_ms: status,
+            pageLoadApiTime_ms: status,
+            domContentLoadedApiTime_ms: status,
+            pageSize_Bytes: status,
+            pageSize_MB: status,
+            domElementCount: status
+          };
+        } finally {
+          initialLoadMetricsOverTries.push(metrics); // Push collected metrics or error placeholders
 
           const dataRow = [
             `"${url}"`,
@@ -316,13 +313,13 @@ function calculateAverage(metricsArray, metricName) {
             metrics.loadTime_ms,
             metrics.pageLoadApiTime_ms,
             metrics.domContentLoadedApiTime_ms,
-            metrics.totalTransferredBytes,
-            metrics.totalTransferredMB,
+            metrics.pageSize_Bytes,
+            metrics.pageSize_MB,
             metrics.domElementCount
           ].join(',');
           fs.appendFileSync(outputPath, dataRow + '\n');
-          console.log(`      [Initial Load Try] Error data for Try ${i + 1} appended.`);
-        } finally {
+          console.log(`      [Initial Load Try] Data for Try ${i + 1} appended (Status: ${status}).`);
+
           if (page) {
             await page.close();
           }
@@ -334,8 +331,8 @@ function calculateAverage(metricsArray, metricName) {
         loadTime_ms: calculateAverage(initialLoadMetricsOverTries, 'loadTime_ms'),
         pageLoadApiTime_ms: calculateAverage(initialLoadMetricsOverTries, 'pageLoadApiTime_ms'),
         domContentLoadedApiTime_ms: calculateAverage(initialLoadMetricsOverTries, 'domContentLoadedApiTime_ms'),
-        totalTransferredBytes: calculateAverage(initialLoadMetricsOverTries, 'totalTransferredBytes'),
-        totalTransferredMB: calculateAverage(initialLoadMetricsOverTries, 'totalTransferredMB'),
+        pageSize_Bytes: calculateAverage(initialLoadMetricsOverTries, 'pageSize_Bytes'),
+        pageSize_MB: calculateAverage(initialLoadMetricsOverTries, 'pageSize_MB'),
         domElementCount: calculateAverage(initialLoadMetricsOverTries, 'domElementCount'),
       };
       console.log(`  [Site Loop] Average initial load metrics for ${url}:`, avgInitialLoadMetrics);
@@ -348,35 +345,30 @@ function calculateAverage(metricsArray, metricName) {
           for (let i = 0; i < NUM_TRIES_HOMEPAGE_NAVIGATION; i++) {
               let pageForNavigation;
               let metrics = {};
+              let status = 'N/A'; // Default for any error
               try {
                   console.log(`    [Homepage Navigation Try] Starting Try ${i + 1}/${NUM_TRIES_HOMEPAGE_NAVIGATION}...`);
                   pageForNavigation = await browser.newPage();
-                  // Reuse getPageLoadMetrics for homepage navigation
                   metrics = await getPageLoadMetrics(pageForNavigation, identifiedHomepageHref);
-                  homepageNavigationMetricsOverTries.push(metrics);
-
-                  const dataRow = [
-                    `"${url}"`,
-                    i + 1,
-                    `"Homepage Navigation"`,
-                    homepageLinkFoundOverall,
-                    `"${identifiedHomepageHref}"`,
-                    metrics.domContentLoadedTime_ms,
-                    metrics.loadTime_ms,
-                    metrics.pageLoadApiTime_ms,
-                    metrics.domContentLoadedApiTime_ms,
-                    metrics.totalTransferredBytes,
-                    metrics.totalTransferredMB,
-                    metrics.domElementCount
-                  ].join(',');
-                  fs.appendFileSync(outputPath, dataRow + '\n');
-                  console.log(`      [Homepage Navigation Try] Data for Try ${i + 1} appended.`);
-
+                  status = 'Success';
               } catch (error) {
                   console.error(`      [ERROR] Homepage Navigation Try ${i + 1} for ${url} failed:`, error.message);
-                  // Push placeholder metrics for failed tries
-                  metrics = { error: error.message, domContentLoadedTime_ms: 'N/A', loadTime_ms: 'N/A', pageLoadApiTime_ms: 'N/A', domContentLoadedApiTime_ms: 'N/A', totalTransferredBytes: 'N/A', totalTransferredMB: 'N/A', domElementCount: 'N/A' };
-                  homepageNavigationMetricsOverTries.push(metrics);
+                  if (error.name === 'TimeoutError') {
+                      status = 'DNF'; // Specific DNF for timeouts
+                  }
+                  // Set metrics to the determined status string
+                  metrics = {
+                    error: error.message,
+                    domContentLoadedTime_ms: status,
+                    loadTime_ms: status,
+                    pageLoadApiTime_ms: status,
+                    domContentLoadedApiTime_ms: status,
+                    pageSize_Bytes: status,
+                    pageSize_MB: status,
+                    domElementCount: status
+                  };
+              } finally {
+                  homepageNavigationMetricsOverTries.push(metrics); // Push collected metrics or error placeholders
 
                   const dataRow = [
                     `"${url}"`,
@@ -388,13 +380,13 @@ function calculateAverage(metricsArray, metricName) {
                     metrics.loadTime_ms,
                     metrics.pageLoadApiTime_ms,
                     metrics.domContentLoadedApiTime_ms,
-                    metrics.totalTransferredBytes,
-                    metrics.totalTransferredMB,
+                    metrics.pageSize_Bytes,
+                    metrics.pageSize_MB,
                     metrics.domElementCount
                   ].join(',');
                   fs.appendFileSync(outputPath, dataRow + '\n');
-                  console.log(`      [Homepage Navigation Try] Error data for Try ${i + 1} appended.`);
-              } finally {
+                  console.log(`      [Homepage Navigation Try] Data for Try ${i + 1} appended (Status: ${status}).`);
+
                   if (pageForNavigation) {
                       await pageForNavigation.close();
                   }
@@ -402,7 +394,7 @@ function calculateAverage(metricsArray, metricName) {
           }
       } else {
           console.log(`  [Site Loop] Skipping homepage navigation measurements as no link was identified.`);
-          // Append N/A rows if no link was found at all
+          // Append DNF/N/A rows if no link was found at all
           for (let i = 0; i < NUM_TRIES_HOMEPAGE_NAVIGATION; i++) {
             const dataRow = [
               `"${url}"`,
@@ -410,7 +402,7 @@ function calculateAverage(metricsArray, metricName) {
               `"Homepage Navigation"`,
               homepageLinkFoundOverall,
               `"${identifiedHomepageHref}"`,
-              'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A' // All metrics as N/A
+              'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A' // All metrics as N/A since no navigation was attempted
             ].join(',');
             fs.appendFileSync(outputPath, dataRow + '\n');
           }
@@ -422,8 +414,8 @@ function calculateAverage(metricsArray, metricName) {
         domContentLoadedTime_ms: calculateAverage(homepageNavigationMetricsOverTries, 'domContentLoadedTime_ms'),
         pageLoadApiTime_ms: calculateAverage(homepageNavigationMetricsOverTries, 'pageLoadApiTime_ms'),
         domContentLoadedApiTime_ms: calculateAverage(homepageNavigationMetricsOverTries, 'domContentLoadedApiTime_ms'),
-        totalTransferredBytes: calculateAverage(homepageNavigationMetricsOverTries, 'totalTransferredBytes'),
-        totalTransferredMB: calculateAverage(homepageNavigationMetricsOverTries, 'totalTransferredMB'),
+        pageSize_Bytes: calculateAverage(homepageNavigationMetricsOverTries, 'pageSize_Bytes'),
+        pageSize_MB: calculateAverage(homepageNavigationMetricsOverTries, 'pageSize_MB'),
         domElementCount: calculateAverage(homepageNavigationMetricsOverTries, 'domElementCount'),
       };
       console.log(`  [Site Loop] Average homepage navigation metrics for ${url}:`, avgHomepageNavigationMetrics);
