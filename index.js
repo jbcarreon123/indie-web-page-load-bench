@@ -119,13 +119,7 @@ async function findHomepageLinkOnce(page, initialUrl) {
             if (count > 0) {
                 for (let i = 0; i < count; i++) {
                     const locator = locators.nth(i);
-                    let elementReady = false;
-                    try {
-                        await locator.waitFor({ state: 'visible', timeout: DEFAULT_ELEMENT_WAIT_TIMEOUT });
-                        elementReady = true;
-                    } catch (timeoutError) {
-                        console.log(`        [Homepage Link Finder] Locator "${selector}" (index ${i}) did not become visible.`);
-                    }
+                    let elementReady = true;
 
                     if (elementReady) {
                         const href = await locator.getAttribute('href');
