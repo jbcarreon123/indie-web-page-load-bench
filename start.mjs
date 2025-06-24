@@ -118,7 +118,7 @@ async function getPageMetrics(url, name) {
         }
     } catch (e) {
         console.error(e);
-        if (error.name === 'TimeoutError') {
+        if (e.name === 'TimeoutError') {
             return {
                 pageLoadTime_ms: 'DNF',
                 domContentLoadedTime_ms: 'DNF',
