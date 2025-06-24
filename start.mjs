@@ -95,7 +95,7 @@ async function getPageMetrics(url, name) {
                     let u = new URL(href);
                     if (u.hostname != new URL(page.url()).hostname) continue;
                 } catch { }
-                if (href !== "/" && href !== "/index.html" && href) {
+                if (href !== "/" && href !== "/index.html" && href && !href.startsWith('#') && !href.startsWith('?')) {
                     otherPage = href;
                     break;
                 }
