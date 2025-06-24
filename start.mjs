@@ -67,19 +67,19 @@ async function getPageMetrics(url, name) {
             }
             totalTransferredResources++;
         } catch (error) {
+            if (error.message.includes('Response body is unavailable for redirect responses')) {
+                console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
+                totalCrossOriginTransferredBytes = 0;
+                totalSameOriginTransferredBytes = 0;
+                totalTransferredBytes = 0;
+                totalTransferredResources = 0;
+            }
             console.warn(`[NetMoni] Error processing response: ${error.message}`);
         }
     });
     try {
         console.log(`[PageMtr] trying ${url}...`)
         await page.goto(url, { waitUntil: 'commit', timeout: PG_TIMEOUT });
-        if (new URL(page.url()).hostname != new URL(url).hostname && new URL(page.url()).pathname != new URL(url).pathname) {
-            console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
-            totalCrossOriginTransferredBytes = 0;
-            totalSameOriginTransferredBytes = 0;
-            totalTransferredBytes = 0;
-            totalTransferredResources = 0;
-        }
         await page.waitForLoadState('load', { timeout: PG_TIMEOUT });
         const performanceTiming = await page.evaluate(() => {
             return performance.getEntriesByType('navigation')[0];
@@ -164,7 +164,7 @@ async function loadPages() {
         for (let i = 1; i <= 3; i++) {
             indexPageMetricTimes.push(await getPageMetrics(site, 'iter-' + i));
         }
-        if (indexPageMetricTimes[2].otherPage != "N/A") {
+        if (indexPageMetricTimes[2].otherPage != "N/A" && indexPageMetricTimes[2].otherPage != "DNF") {
             for (let i = 1; i <= 3; i++) {
                 otherPageMetricTimes.push(await getPageMetrics((indexPageMetricTimes[2].otherPage.startsWith('http') ? indexPageMetricTimes[2].otherPage : site + indexPageMetricTimes[2].otherPage), 'other-iter-' + i));
             }
