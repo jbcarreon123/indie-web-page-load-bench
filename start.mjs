@@ -24,6 +24,7 @@ async function getPageMetrics(url, name) {
     let totalSameOriginTransferredBytes = 0;
     let totalCrossOriginTransferredBytes = 0;
     let totalTransferredResources = 0;
+    let redirected = false;
     console.log(`[PageMtr] Getting page metrics of URL ${url}... (${name})`);
     let pagePath = `./results/har/${new URL(url).hostname}`;
     if (!fs.existsSync(pagePath)) {
@@ -44,12 +45,13 @@ async function getPageMetrics(url, name) {
     page.on('response', async response => {
         try {
             console.warn(`[NetMoni] Fetched ${response.request().method()} request ${response.url()} for ${page.url()} (status code: ${response.status()})`);
-            if (response.status() >= 301 && response.status() <= 399) {
+            if (response.status() >= 301 && response.status() <= 399 && !redirected) {
                 console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
                 totalCrossOriginTransferredBytes = 0;
                 totalSameOriginTransferredBytes = 0;
                 totalTransferredBytes = 0;
                 totalTransferredResources = 0;
+                redirected = true;
             }
             if (response.status() < 200 || response.status() >= 400) {
                 return;
@@ -127,10 +129,10 @@ async function getPageMetrics(url, name) {
             return {
                 pageLoadTime_ms: 'DNF',
                 domContentLoadedTime_ms: 'DNF',
-                totalTransferred_bytes: 'DNF',
-                totalSameOriginTransferred_bytes: 'DNF',
-                totalCrossOriginTransferred_bytes: 'DNF',
-                totalTransferredResources: 'DNF',
+                totalTransferred_bytes: totalTransferredBytes,
+                totalSameOriginTransferred_bytes: totalSameOriginTransferredBytes,
+                totalCrossOriginTransferred_bytes: totalCrossOriginTransferredBytes,
+                totalTransferredResources: totalTransferredResources,
                 domElementCount: 'DNF',
                 actualPage: 'DNF',
                 otherPage: 'DNF'
