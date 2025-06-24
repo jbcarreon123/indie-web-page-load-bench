@@ -44,7 +44,7 @@ async function getPageMetrics(url, name) {
     page.removeAllListeners('response');
     page.on('response', async response => {
         try {
-            //console.warn(`[NetMoni] Fetched ${response.request().method()} request ${response.url()} for ${page.url()} (status code: ${response.status()})`);
+            console.warn(`[NetMoni] Fetched ${response.request().method()} request ${response.url()} for ${page.url()} (status code: ${response.status()})`);
             if (response.status() >= 301 && response.status() <= 399 && !redirected
                 && new URL(page.url() == "about:blank" ? await response.headerValue('Location') : page.url()).pathname == new URL(url).pathname 
                 && new URL(page.url() == "about:blank" ? await response.headerValue('Location') : page.url()).hostname != new URL(url).hostname) {
@@ -194,8 +194,6 @@ async function loadPages() {
             }
             pageDatas.push(pageData);
             console.log(`[PageMtr] Collected metrics for ${site} (${i + 1}/${sites.length})`);
-            console.log(`[PageMtr] Index Page Metrics:`, indexPageMetricTimes);
-            console.log(`[PageMtr] Other Page Metrics:`, otherPageMetricTimes);
             console.log();
         }
     }
