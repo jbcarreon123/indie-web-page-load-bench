@@ -158,7 +158,7 @@ async function loadPages() {
         for (let i = 1; i <= 3; i++) {
             indexPageMetricTimes.push(await getPageMetrics(site, 'iter-' + i));
         }
-        if (indexPageMetricTimes[2].otherPage != "N/A") {
+        if (indexPageMetricTimes[2].otherPage != "N/A" && new URL(indexPageMetricTimes[2].otherPage).pathname != new URL(indexPageMetricTimes[2].actualPage).pathname) {
             for (let i = 1; i <= 3; i++) {
                 otherPageMetricTimes.push(await getPageMetrics(site + indexPageMetricTimes[2].otherPage, 'other-iter-' + i));
             }
