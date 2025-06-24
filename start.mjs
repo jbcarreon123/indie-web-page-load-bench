@@ -79,7 +79,7 @@ async function getPageMetrics(url, name) {
     });
     try {
         console.log(`[PageMtr] trying ${url}...`)
-        await page.goto(url, { waitUntil: 'commit', timeout: PG_TIMEOUT });
+        await page.goto(url, { waitUntil: 'domcontentloaded' ,timeout: PG_TIMEOUT });
         await page.waitForLoadState('load', { timeout: PG_TIMEOUT });
         const performanceTiming = await page.evaluate(() => {
             return performance.getEntriesByType('navigation')[0];
