@@ -45,7 +45,9 @@ async function getPageMetrics(url, name) {
     page.on('response', async response => {
         try {
             //console.warn(`[NetMoni] Fetched ${response.request().method()} request ${response.url()} for ${page.url()} (status code: ${response.status()})`);
-            if (response.status() >= 301 && response.status() <= 399 && !redirected) {
+            if (response.status() >= 301 && response.status() <= 399 && !redirected
+                && new URL(page.url() == "about:blank" ? await response.headerValue('Location') : page.url()).pathname == new URL(url).pathname 
+                && new URL(page.url() == "about:blank" ? await response.headerValue('Location') : page.url()).hostname != new URL(url).hostname) {
                 console.log(`[PageMtr] Redirects found, redirecting to ${page.url() == "about:blank" ? await response.headerValue('Location') : page.url()}...`);
                 totalCrossOriginTransferredBytes = 0;
                 totalSameOriginTransferredBytes = 0;
