@@ -43,7 +43,14 @@ async function getPageMetrics(url, name) {
     page.removeAllListeners('response');
     page.on('response', async response => {
         try {
-            console.warn(`[NetMoni] Trying to ${response.request().method()} request ${response.url()} for ${page.url()}...`);
+            console.warn(`[NetMoni] Fetched ${response.request().method()} request ${response.url()} for ${page.url()} (status code: ${response.status()})`);
+            if (response.status() >= 301 && response.status() <= 399) {
+                console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
+                totalCrossOriginTransferredBytes = 0;
+                totalSameOriginTransferredBytes = 0;
+                totalTransferredBytes = 0;
+                totalTransferredResources = 0;
+            }
             if (response.status() < 200 || response.status() >= 400) {
                 return;
             }
@@ -67,13 +74,6 @@ async function getPageMetrics(url, name) {
             }
             totalTransferredResources++;
         } catch (error) {
-            if (error.message.includes('Response body is unavailable for redirect responses')) {
-                console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
-                totalCrossOriginTransferredBytes = 0;
-                totalSameOriginTransferredBytes = 0;
-                totalTransferredBytes = 0;
-                totalTransferredResources = 0;
-            }
             console.warn(`[NetMoni] Error processing response: ${error.message}`);
         }
     });
