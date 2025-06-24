@@ -66,7 +66,7 @@ async function getPageMetrics(url, name) {
         }
     });
     try {
-        await page.goto(url, { waitUntil: 'commit' });
+        await page.goto(url, { waitUntil: 'commit', timeout: PG_TIMEOUT });
         if (new URL(page.url()).hostname != new URL(url).hostname && new URL(page.url()).pathname != new URL(url).pathname) {
             console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
             totalCrossOriginTransferredBytes = 0;
@@ -117,6 +117,19 @@ async function getPageMetrics(url, name) {
         }
     } catch (e) {
         console.error(e);
+        if (error.name === 'TimeoutError') {
+            return {
+                pageLoadTime_ms: 'DNF',
+                domContentLoadedTime_ms: 'DNF',
+                totalTransferred_bytes: 'DNF',
+                totalSameOriginTransferred_bytes: 'DNF',
+                totalCrossOriginTransferred_bytes: 'DNF',
+                totalTransferredResources: 'DNF',
+                domElementCount: 'DNF',
+                actualPage: 'DNF',
+                otherPage: 'DNF'
+            }
+        }
         return {
             pageLoadTime_ms: 'N/A',
             domContentLoadedTime_ms: 'N/A',
