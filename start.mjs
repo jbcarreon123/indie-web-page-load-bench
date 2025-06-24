@@ -39,6 +39,7 @@ async function getPageMetrics(url, name) {
     page.removeAllListeners('response');
     page.on('response', async response => {
         try {
+            console.warn(`[NetMoni] Trying to ${response.request().method()} request ${response.url()} for ${page.url()}...`);
             if (response.status() < 200 || response.status() >= 400) {
                 return;
             }
