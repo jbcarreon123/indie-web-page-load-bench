@@ -184,8 +184,11 @@ async function loadPages() {
                 metrics: indexPageMetricTimes,
                 otherMetrics: otherPageMetricTimes
             }
-            console.log(pageData);
             pageDatas.push(pageData);
+            console.log(`[PageMtr] Collected metrics for ${site} (${i + 1}/${sites.length})`);
+            console.log(`[PageMtr] Index Page Metrics:`, indexPageMetricTimes);
+            console.log(`[PageMtr] Other Page Metrics:`, otherPageMetricTimes);
+            console.log();
         }
     }
 
