@@ -176,7 +176,7 @@ async function loadPages() {
             }
             if (indexPageMetricTimes[2].otherPage != "N/A" && indexPageMetricTimes[2].otherPage != "DNF") {
                 for (let i = 1; i <= 3; i++) {
-                    otherPageMetricTimes.push(await getPageMetrics((indexPageMetricTimes[2].otherPage.startsWith('http') ? indexPageMetricTimes[2].otherPage : site + (indexPageMetricTimes[2].otherPage.startsWith('/') ? indexPageMetricTimes[2].otherPage.replace('/', '') : indexPageMetricTimes[2].otherPage)), 'other-iter-' + i));
+                    otherPageMetricTimes.push(await getPageMetrics((indexPageMetricTimes[2].otherPage.startsWith('http') ? indexPageMetricTimes[2].otherPage : indexPageMetricTimes[2].actualPage + (indexPageMetricTimes[2].otherPage.startsWith('/') ? indexPageMetricTimes[2].otherPage.replace('/', '') : indexPageMetricTimes[2].otherPage)), 'other-iter-' + i));
                 }
             }
             let pageData = {
