@@ -17,7 +17,7 @@ if (!fs.existsSync(outPath)) {
     })
 }
 
-const outputFilename = outPath + `metrics-${new Date().toISOString().slice(0, 10)}.json`;
+const outputFilename = outPath + `metrics-${new Date().toISOString().slice(0, 10)}.csv`;
 
 async function getPageMetrics(url, name) {
     let totalTransferredBytes = 0;
@@ -44,9 +44,9 @@ async function getPageMetrics(url, name) {
     page.removeAllListeners('response');
     page.on('response', async response => {
         try {
-            console.warn(`[NetMoni] Fetched ${response.request().method()} request ${response.url()} for ${page.url()} (status code: ${response.status()})`);
+            //console.warn(`[NetMoni] Fetched ${response.request().method()} request ${response.url()} for ${page.url()} (status code: ${response.status()})`);
             if (response.status() >= 301 && response.status() <= 399 && !redirected) {
-                console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
+                console.log(`[PageMtr] Redirects found, redirecting to ${page.url() == "about:blank" ? await response.headerValue('Location') : page.url()}...`);
                 totalCrossOriginTransferredBytes = 0;
                 totalSameOriginTransferredBytes = 0;
                 totalTransferredBytes = 0;
@@ -80,9 +80,7 @@ async function getPageMetrics(url, name) {
         }
     });
     try {
-        console.log(`[PageMtr] trying ${url}...`)
-        await page.goto(url, { waitUntil: 'domcontentloaded' ,timeout: PG_TIMEOUT });
-        await page.waitForLoadState('load', { timeout: PG_TIMEOUT });
+        await page.goto(url, { waitUntil: 'load', timeout: PG_TIMEOUT });
         const performanceTiming = await page.evaluate(() => {
             return performance.getEntriesByType('navigation')[0];
         });
@@ -153,37 +151,58 @@ async function getPageMetrics(url, name) {
 }
 
 async function loadPages() {
-    let jsonFile = fs.readFileSync('./pages.json', 'utf-8');
-    /**  @type {string[]} */
-    let json = JSON.parse(jsonFile);
+    let datasets = [];
+    fs.readdirSync('./datasets').forEach((f) => {
+        if (f.endsWith('.json')) {
+            let dataset = JSON.parse(fs.readFileSync(`./datasets/${f}`, 'utf-8'));
+            datasets.push(dataset);
+            console.log(`[PageMtr] Loaded dataset ${dataset.name} (${f}) with ${dataset.urls.length} sites.`);
+        }
+    });
 
     let pageDatas = [];
 
-    for (let i = 0; i < json.length; i++) {
-        let site = json[i];
-        let indexPageMetricTimes = [];
-        let otherPageMetricTimes = [];
-        for (let i = 1; i <= 3; i++) {
-            indexPageMetricTimes.push(await getPageMetrics(site, 'iter-' + i));
-        }
-        if (indexPageMetricTimes[2].otherPage != "N/A" && indexPageMetricTimes[2].otherPage != "DNF") {
+    for (let dataset of datasets) {
+        console.log(`[PageMtr] Processing dataset ${dataset.name}...`);
+        let sites = dataset.urls;
+        for (let i = 0; i < sites.length; i++) {
+            let site = sites[i];
+            let indexPageMetricTimes = [];
+            let otherPageMetricTimes = [];
             for (let i = 1; i <= 3; i++) {
-                otherPageMetricTimes.push(await getPageMetrics((indexPageMetricTimes[2].otherPage.startsWith('http') ? indexPageMetricTimes[2].otherPage : site + indexPageMetricTimes[2].otherPage), 'other-iter-' + i));
+                indexPageMetricTimes.push(await getPageMetrics(site, 'iter-' + i));
             }
+            if (indexPageMetricTimes[2].otherPage != "N/A" && indexPageMetricTimes[2].otherPage != "DNF") {
+                for (let i = 1; i <= 3; i++) {
+                    otherPageMetricTimes.push(await getPageMetrics((indexPageMetricTimes[2].otherPage.startsWith('http') ? indexPageMetricTimes[2].otherPage : site + (indexPageMetricTimes[2].otherPage.startsWith('/') ? indexPageMetricTimes[2].otherPage.replace('/', '') : indexPageMetricTimes[2].otherPage)), 'other-iter-' + i));
+                }
+            }
+            let pageData = {
+                dataset: dataset.name,
+                siteUrl: site,
+                actualSiteUrl: indexPageMetricTimes[0].actualPage,
+                metrics: indexPageMetricTimes,
+                otherMetrics: otherPageMetricTimes
+            }
+            console.log(pageData);
+            pageDatas.push(pageData);
         }
-        let pageData = {
-            siteUrl: site,
-            actualSiteUrl: indexPageMetricTimes[0].actualPage,
-            metrics: indexPageMetricTimes,
-            otherMetrics: otherPageMetricTimes
-        }
-        console.log(pageData);
-        pageDatas.push(pageData);
     }
 
-    fs.writeFileSync(outputFilename, JSON.stringify(pageDatas));
+    console.log(`[PageMtr] Writing results to ${outputFilename}...`);
+
+    let csvContent = "Dataset,Site URL,Actual Site URL,DOMContentLoaded #1,DOMContentLoaded #2,DOMContentLoaded #3,Page Load Time #1,Page Load Time #2,Page Load Time #3,Total Transferred Bytes,Total Same-Origin Transferred Bytes,Total Cross-Origin Transferred Bytes,Total Transferred Resources,DOM Element Count,Other Page,Other DOMContentLoaded Time #1,Other DOMContentLoaded Time #2,Other DOMContentLoaded Time #3,Other Page Load Time #1,Other Page Load Time #2,Other Page Load Time #3,Other Total Transferred Bytes,Other Total Same-Origin Transferred Bytes,Other Total Cross-Origin Transferred Bytes,Other Total Transferred Resources,Other DOM Element Count\n";
+
+    for (let pageData of pageDatas) {
+        let metrics = pageData.metrics;
+        let otherMetrics = pageData.otherMetrics;
+
+        csvContent += `${pageData.dataset},${pageData.siteUrl},${pageData.actualSiteUrl},${metrics[0].domContentLoadedTime_ms},${metrics[1].domContentLoadedTime_ms},${metrics[2].domContentLoadedTime_ms},${metrics[0].pageLoadTime_ms},${metrics[1].pageLoadTime_ms},${metrics[2].pageLoadTime_ms},${metrics[2].totalTransferred_bytes},${metrics[2].totalSameOriginTransferred_bytes},${metrics[2].totalCrossOriginTransferred_bytes},${metrics[2].totalTransferredResources},${metrics[2].domElementCount},${otherMetrics.length > 0 ? otherMetrics[0].actualPage : "N/A"},${otherMetrics.length > 0 ? otherMetrics[0].domContentLoadedTime_ms : "N/A"},${otherMetrics.length > 0 ? otherMetrics[1].domContentLoadedTime_ms : "N/A"},${otherMetrics.length > 0 ? otherMetrics[2].domContentLoadedTime_ms : "N/A"},${otherMetrics.length > 0 ? otherMetrics[0].pageLoadTime_ms : "N/A"},${otherMetrics.length > 0 ? otherMetrics[1].pageLoadTime_ms : "N/A"},${otherMetrics.length > 0 ? otherMetrics[2].pageLoadTime_ms : "N/A"},${otherMetrics.length > 0 ? otherMetrics[2].totalTransferred_bytes : "N/A"},${otherMetrics.length > 0 ? otherMetrics[2].totalSameOriginTransferred_bytes : "N/A"},${otherMetrics.length > 0 ? otherMetrics[2].totalCrossOriginTransferred_bytes : "N/A"},${otherMetrics.length > 0 ? otherMetrics[2].totalTransferredResources : "N/A"},${otherMetrics.length > 0 ? otherMetrics[2].domElementCount : "N/A"}\n`;
+    }
+
+    fs.writeFileSync(outputFilename, csvContent, 'utf-8');
+    console.log(`[PageMtr] Results written to ${outputFilename}`);
 }
 
 await loadPages();
-
 await browser.close();
