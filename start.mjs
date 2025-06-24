@@ -125,8 +125,12 @@ async function getPageMetrics(url, name) {
         }
     } catch (e) {
         console.error(e);
-        await page.close();
-        await context.close();
+        try {
+            await page.close();
+        } catch {}
+        try {
+            await context.close();
+        } catch {}
         if (e.name === 'TimeoutError') {
             return {
                 pageLoadTime_ms: 'DNF',
