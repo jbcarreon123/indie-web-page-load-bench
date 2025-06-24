@@ -66,6 +66,7 @@ async function getPageMetrics(url, name) {
         }
     });
     try {
+        console.log(`[PageMtr] trying ${url}...`)
         await page.goto(url, { waitUntil: 'commit', timeout: PG_TIMEOUT });
         if (new URL(page.url()).hostname != new URL(url).hostname && new URL(page.url()).pathname != new URL(url).pathname) {
             console.log(`[PageMtr] Redirects found, redirecting to ${page.url()}`);
@@ -93,7 +94,7 @@ async function getPageMetrics(url, name) {
                 try {
                     let u = new URL(href);
                     if (u.hostname != new URL(page.url()).hostname) continue;
-                } catch {}
+                } catch { }
                 if (href !== "/" && href !== "/index.html" && href) {
                     otherPage = href;
                     break;
@@ -160,7 +161,7 @@ async function loadPages() {
         }
         if (indexPageMetricTimes[2].otherPage != "N/A") {
             for (let i = 1; i <= 3; i++) {
-                otherPageMetricTimes.push(await getPageMetrics(site + indexPageMetricTimes[2].otherPage, 'other-iter-' + i));
+                otherPageMetricTimes.push(await getPageMetrics((indexPageMetricTimes[2].otherPage.startsWith('http') ? indexPageMetricTimes[2].otherPage : site + indexPageMetricTimes[2].otherPage), 'other-iter-' + i));
             }
         }
         let pageData = {
